@@ -1,0 +1,10 @@
+# compiled binaries
+/profilegif
+/profilegif.exe
+/out/
+
+# generated artifacts
+*.gif
+
+# local secrets
+.env

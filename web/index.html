@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>profilegif — animated GitHub stats for your README</title>
+  <script src="https://unpkg.com/htmx.org@2.0.3"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 4rem auto; padding: 0 1rem; color: #1a1a1a; }
+    h1 { margin-bottom: .25rem; }
+    p.sub { color: #666; margin-top: 0; }
+    form { display: flex; gap: .5rem; margin: 1.5rem 0; }
+    input, button { font-size: 1rem; padding: .5rem .75rem; border: 1px solid #ccc; border-radius: 6px; }
+    button { cursor: pointer; background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+    #preview { margin-top: 1.5rem; min-height: 2rem; }
+  </style>
+</head>
+<body>
+  <h1>profilegif</h1>
+  <p class="sub">Animated GitHub stats GIF for your profile README.</p>
+
+  <!-- htmx posts the form, gets back an HTML fragment (the &lt;img&gt;), and swaps it into #preview. -->
+  <form hx-get="/preview" hx-target="#preview" hx-swap="innerHTML">
+    <input name="user" placeholder="github username (e.g. sorfeb)" required>
+    <button type="submit">Preview</button>
+  </form>
+
+  <div id="preview"></div>
+</body>
+</html>
