@@ -1,16 +1,18 @@
-// Package gifmaker is the CORE library: fetch GitHub stats, render frames, encode a GIF.
+// Package gifmaker is the GitHub-stats front door: it fetches a user's stats and turns them
+// into a ready-to-serve animated GIF. It owns the *default* composition (DefaultScene) but
+// delegates all pixel work to internal/render and the document model to internal/scene, so
+// the web server and the TUI editor share one rendering pipeline.
 //
 // Keep this package free of HTTP/CLI assumptions — it just takes inputs and writes bytes.
-// Both entry points (the web server today, a CLI later) call into here. This separation is
-// what makes "deploy to a frontend" an afternoon instead of a rewrite.
-//
-// Fetch, Render, and Encode are stubbed out below — see the TODOs.
 package gifmaker
 
 import (
 	"context"
 	"fmt"
 	"io"
+
+	"github.com/sorfeb/profilegif/internal/render"
+	"github.com/sorfeb/profilegif/internal/scene"
 )
 
 // Stats holds the GitHub data we animate into frames.
@@ -18,28 +20,49 @@ type Stats struct {
 	Login        string
 	TotalCommits int
 	Followers    int
-	// TODO(step 2): add Languages []LangStat, ContributionDays []int, Streak int, etc.
+	Stars        int
+	// Future: Languages []LangStat, ContributionDays []int, Streak int, etc.
 }
 
-// Fetch pulls stats for a GitHub user.
-//
-// TODO(step 2): implement with the GitHub GraphQL API for the contribution calendar
-// (query `user.contributionsCollection`) + REST for the rest. Use net/http; the token is
-// passed in by the caller (read from an env var there, not here). Handle rate limits.
-func Fetch(ctx context.Context, login, token string) (Stats, error) {
-	return Stats{}, notImpl("Fetch")
+// DefaultScene builds the standard stats composition from fetched Stats. This is the layout
+// the web server serves out of the box; the TUI editor can load, rearrange, and re-save it.
+func DefaultScene(s Stats) *scene.Scene {
+	sc := scene.NewScene(800, 400)
+
+	title := scene.NewText(scene.Rect{X: 0, Y: 26, W: 800, H: 80}, "@"+s.Login)
+	title.FontSize = 56
+	title.Color = "#e6edf3"
+	sc.Add(title)
+
+	commits := scene.NewStatWidget(scene.Rect{X: 60, Y: 150, W: 200, H: 190}, scene.MetricCommits, s.Login)
+	commits.Value = s.TotalCommits
+	commits.Label = "commits"
+	commits.FontSize = 44
+	sc.Add(commits)
+
+	followers := scene.NewStatWidget(scene.Rect{X: 300, Y: 150, W: 200, H: 190}, scene.MetricFollowers, s.Login)
+	followers.Value = s.Followers
+	followers.Label = "followers"
+	followers.Color = "#58a6ff"
+	followers.FontSize = 44
+	sc.Add(followers)
+
+	stars := scene.NewStatWidget(scene.Rect{X: 540, Y: 150, W: 200, H: 190}, scene.MetricStars, s.Login)
+	stars.Value = s.Stars
+	stars.Label = "stars"
+	stars.Color = "#e3b341"
+	stars.FontSize = 44
+	sc.Add(stars)
+
+	return sc
 }
 
-// Render turns Stats into animated frames and writes an encoded GIF to w.
-//
-// TODO(step 3): `go get github.com/fogleman/gg`. For each frame draw with a gg.Context
-// (bars growing, counters ticking up), convert the result to *image.Paletted, collect them,
-// then image/gif.EncodeAll(w, &gif.GIF{Image: frames, Delay: delays, LoopCount: 0}).
+// Render builds the default scene for these stats and encodes it as an animated GIF to w.
 func Render(w io.Writer, s Stats) error {
-	return notImpl("Render")
+	return render.EncodeScene(w, DefaultScene(s))
 }
 
-// Generate is the one-call pipeline the HTTP handler (and a future CLI) use.
+// Generate is the one-call pipeline the HTTP handler (and the CLI) use.
 func Generate(ctx context.Context, w io.Writer, login, token string) error {
 	s, err := Fetch(ctx, login, token)
 	if err != nil {
@@ -47,5 +70,3 @@ func Generate(ctx context.Context, w io.Writer, login, token string) error {
 	}
 	return Render(w, s)
 }
-
-func notImpl(fn string) error { return fmt.Errorf("gifmaker: %s not implemented yet", fn) }
