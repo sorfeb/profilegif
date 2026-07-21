@@ -96,16 +96,33 @@ func fitCanvas(availCols, availRows, W, H int) (int, int) {
 	return cols, rows
 }
 
-// canvasView rasterizes the current frame, paints the selection overlay, and converts to
-// half-block cells.
+// canvasView returns the current frame as half-block cells. The rasterized frame (the
+// expensive part: gg drawing + fonts) is cached size-independently; only the selection
+// overlay and the downscale to cols×rows run per call.
 func (m Model) canvasView(vp viewport) string {
-	img := ensureRGBA(render.Rasterize(m.scene, m.frame))
+	base, ok := m.baseCache[m.frame]
+	if !ok {
+		base = ensureRGBA(render.Rasterize(m.scene, m.frame))
+		if m.baseCache != nil {
+			m.baseCache[m.frame] = base // shared backing map → persists across Update copies
+		}
+	}
+
+	img := base
 	if el := m.sel(); el != nil {
+		img = cloneRGBA(base)                         // never scribble the overlay onto the cached frame
 		th := int(math.Max(vp.scaleX, vp.scaleY)) + 1 // keep the outline visible after downscale
 		drawOutline(img, el.Bounds(), selColor, th)
 		drawHandle(img, el.Bounds(), handleColor, th*3)
 	}
 	return m.renderer.Render(img, vp.cols, vp.rows)
+}
+
+// cloneRGBA returns a deep copy so overlay drawing doesn't mutate a cached frame.
+func cloneRGBA(src *image.RGBA) *image.RGBA {
+	dst := image.NewRGBA(src.Bounds())
+	copy(dst.Pix, src.Pix)
+	return dst
 }
 
 // ensureRGBA returns img as *image.RGBA, copying only if necessary (gg already returns one).

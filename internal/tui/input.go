@@ -2,6 +2,7 @@ package tui
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -60,6 +61,7 @@ func (m *Model) closeInput(status string) {
 // commitInput applies the entered value according to what the overlay was collecting.
 func (m *Model) commitInput() {
 	v := strings.TrimSpace(m.input.Value())
+	defer m.invalidate() // any add/edit changes the rendered scene
 	switch m.inputFor {
 	case inputAddText:
 		if v == "" {
@@ -145,7 +147,7 @@ func (m *Model) doSave(path string) {
 		return
 	}
 	m.scenePath = path
-	m.status = "saved " + path
+	m.status = "saved " + absOr(path)
 }
 
 func (m *Model) doExport(path string) {
@@ -162,7 +164,15 @@ func (m *Model) doExport(path string) {
 		m.status = "export failed: " + err.Error()
 		return
 	}
-	m.status = "exported " + path
+	m.status = "exported " + absOr(path)
+}
+
+// absOr returns the absolute form of path, or path itself if that can't be resolved.
+func absOr(path string) string {
+	if abs, err := filepath.Abs(path); err == nil {
+		return abs
+	}
+	return path
 }
 
 // defaultLogin picks a login for new stat widgets: reuse an existing one if present.

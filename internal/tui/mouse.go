@@ -88,6 +88,7 @@ func (m *Model) onDrag(cellX, cellY int) {
 		}
 		el.SetBounds(r)
 	}
+	m.invalidate()
 }
 
 func (m *Model) onRelease() {

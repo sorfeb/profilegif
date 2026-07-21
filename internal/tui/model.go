@@ -10,6 +10,7 @@
 package tui
 
 import (
+	"image"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -48,6 +49,13 @@ type Model struct {
 
 	width, height int // terminal size in cells
 
+	// baseCache holds rasterized frames (without the selection overlay), keyed by frame
+	// index. It's size-independent — a resize only re-scales cached pixels instead of
+	// re-drawing them — which keeps rapid resizes (Ctrl +/-) from backing up the event loop.
+	// Invalidated via invalidate() whenever the scene changes. (Maps are reference types, so
+	// writes from View and clears from Update share one backing store.)
+	baseCache map[int]*image.RGBA
+
 	// drag state (Phase 5)
 	mode     interactionMode
 	dragging bool
@@ -80,6 +88,7 @@ func New(s *scene.Scene, path string) Model {
 		selected:  sel,
 		playing:   true,
 		input:     ti,
+		baseCache: map[int]*image.RGBA{},
 		status:    "ready",
 	}
 }
@@ -113,4 +122,11 @@ func (m *Model) sel() scene.Element {
 		return nil
 	}
 	return m.scene.Layers[m.selected]
+}
+
+// invalidate drops cached frames after a scene edit so the next render reflects the change.
+// (Selection/size changes don't need this — the overlay is applied per-render and the cache
+// is size-independent.)
+func (m *Model) invalidate() {
+	clear(m.baseCache)
 }
