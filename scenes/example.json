@@ -1,0 +1,45 @@
+{
+  "w": 800,
+  "h": 400,
+  "fps": 15,
+  "durationMs": 3000,
+  "layers": [
+    {
+      "kind": "text",
+      "rect": { "x": 0, "y": 26, "w": 800, "h": 80 },
+      "text": "@sorfeb",
+      "fontSize": 56,
+      "color": "#e6edf3"
+    },
+    {
+      "kind": "statWidget",
+      "rect": { "x": 60, "y": 150, "w": 200, "h": 190 },
+      "metric": "commits",
+      "login": "sorfeb",
+      "label": "commits",
+      "value": 4237,
+      "color": "#39d353",
+      "fontSize": 44
+    },
+    {
+      "kind": "statWidget",
+      "rect": { "x": 300, "y": 150, "w": 200, "h": 190 },
+      "metric": "followers",
+      "login": "sorfeb",
+      "label": "followers",
+      "value": 128,
+      "color": "#58a6ff",
+      "fontSize": 44
+    },
+    {
+      "kind": "statWidget",
+      "rect": { "x": 540, "y": 150, "w": 200, "h": 190 },
+      "metric": "stars",
+      "login": "sorfeb",
+      "label": "stars",
+      "value": 512,
+      "color": "#e3b341",
+      "fontSize": 44
+    }
+  ]
+}
