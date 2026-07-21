@@ -1,82 +1,158 @@
+<div align="center">
+
 # profilegif
 
-Animated GitHub-stats GIF for your profile README — with an **interactive terminal editor**.
-One Go binary is both a web service (the `/gif` embed endpoint) and a mouse-driven TUI where
-you drag & resize elements on a canvas. No Node, no separate frontend, deploys anywhere.
+**Animated GitHub-stats GIFs for your profile README — composed in an interactive terminal editor.**
 
-## Two front-ends, one core
+One Go binary is both a web service *and* a mouse-driven TUI where you drag & resize elements
+on a canvas. No Node, no separate frontend, deploys anywhere.
+
+![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)
+![License: MIT](https://img.shields.io/badge/license-MIT-green)
+![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)
+
+![The profilegif terminal editor](assets/editor.png)
+
+</div>
+
+---
+
+## Table of contents
+
+- [What it does](#what-it-does)
+- [Quickstart](#quickstart)
+- [The editor](#the-editor)
+- [The web service](#the-web-service)
+- [Configuration](#configuration)
+- [How it works](#how-it-works)
+- [Hosting](#hosting)
+- [Contributing](#contributing)
+- [License](#license)
+
+## What it does
+
+`profilegif` produces the animated stats card you drop into a GitHub profile README:
+
+![Example output](assets/demo.gif)
+
+But the interesting part is **how you build it**. Instead of fiddling with config files, you
+lay the card out visually in your terminal — drag widgets around, resize them, retype labels —
+then export a GIF or serve it live. Same rendering core drives both.
+
+- 🖱️ **Drag & resize in the terminal** — a real editor, mouse and all, no browser.
+- 🎨 **Hybrid canvas** — background image/GIF + GitHub-stat widgets + free text/image layers.
+- ▶️ **Live animation preview** — watch counters tick and bars grow as you edit.
+- 🌐 **Serve or export** — an embeddable image URL for your README, or a `.gif` file.
+- 📦 **Single static binary** — pure Go, `CGO_ENABLED=0`, runs anywhere.
+
+## Quickstart
+
+Requires **Go 1.25+**.
 
 ```sh
-go run .                     # or: go run . serve  → web server on :8080
-go run . edit                # interactive TUI editor (drag/resize elements, export a GIF)
+git clone https://github.com/sorfeb/profilegif.git
+cd profilegif
+
+go run . edit          # open the interactive editor (sample data — no token needed)
+go run . serve         # start the web server on http://localhost:8080
 ```
 
-### The editor (`profilegif edit`)
-
-A hybrid canvas rendered right in your terminal using truecolor half-blocks:
+## The editor
 
 ```sh
 go run . edit                       # open a sample composition
 go run . edit scenes/example.json   # edit a saved scene
-go run . edit -user octocat         # start from live stats (needs GITHUB_TOKEN)
-go run . edit -user me -mock        # sample stats, no network/token
+go run . edit -user octocat         # start from live GitHub stats (needs GITHUB_TOKEN)
+go run . edit -user me -mock        # start from sample stats — no network, no token
 ```
+
+It renders the canvas right in your terminal using truecolor **half-blocks** (each character
+cell shows two stacked pixels), so it works in any modern terminal — Windows Terminal, iTerm2,
+most Linux terminals — with no graphics protocol required.
 
 | Key | Action | | Key | Action |
 |---|---|---|---|---|
-| **drag** / arrows | move element | | `t` `i` `g` `b` | add text / image / stat / background |
+| **drag** / `↑↓←→` | move element | | `t` `i` `g` `b` | add text / image / stat / background |
 | **drag corner** | resize | | `↵` | edit selected element's text/path |
-| `tab` | cycle selection | | `[` `]` | send back / bring forward |
-| `space` | play/pause preview | | `s` `e` | save scene JSON / export GIF |
+| `tab` | cycle selection | | `[` `]` | send backward / bring forward |
+| `space` | play / pause preview | | `s` `e` | save scene JSON / export GIF |
 | `d` | delete | | `q` | quit |
 
-Composition is a **renderer-agnostic scene model** (`internal/scene`) → real pixels
-(`internal/render`) → terminal cells (`internal/termimg`). Half-blocks work in any modern
-terminal; a Sixel/Kitty high-fidelity backend can drop in later behind the same interface.
+> **Note on preview quality:** the in-terminal canvas is intentionally coarse — a terminal has
+> far fewer "pixels" than the image. Your **exported GIF and the web output render at full
+> resolution.** For a sharper preview, use a smaller terminal font (more cells = more pixels).
 
-### The web server (`profilegif serve`)
+## The web service
 
 ```sh
-go run .            # open http://localhost:8080
+go run . serve       # → http://localhost:8080
 ```
 
-- `GET /gif?user=<login>` — the default GitHub-stats GIF (needs `GITHUB_TOKEN`, or run with
-  `PROFILEGIF_MOCK=1` for sample data). Paste `![](https://yourhost/gif?user=you)` into your
-  README; GitHub's Camo proxy caches it so most views never hit your server.
-- `GET /gif?scene=<name>` — renders a scene you authored in the editor and saved to
-  `./scenes/<name>.json`. This is the bridge: **compose in the TUI, serve on the web.**
+- **`GET /`** — an htmx page: type a username, hit Preview, see the GIF.
+- **`GET /gif?user=<login>`** — the default stats GIF for a user (needs `GITHUB_TOKEN`, or run
+  with `PROFILEGIF_MOCK=1`). Paste it into your README and GitHub's Camo proxy caches it, so
+  most views never even hit your server:
 
-## Layout
+  ```markdown
+  ![my stats](https://your-host/gif?user=you)
+  ```
+
+- **`GET /gif?scene=<name>`** — renders a scene you authored in the editor and saved to
+  `./scenes/<name>.json`. **This is the bridge: compose in the TUI, serve on the web.**
+
+## Configuration
+
+| Variable | Purpose |
+|---|---|
+| `PORT` | Port the server listens on (default `8080`; `serve -port` overrides). |
+| `GITHUB_TOKEN` | Read-only PAT for the GitHub GraphQL API (followers, commit contributions, summed stars). |
+| `PROFILEGIF_MOCK=1` | Skip the API and use deterministic sample data — great for local dev, demos, and CI. The editor's `-mock` flag sets this for you. |
+
+## How it works
+
+The design keeps the *document* separate from *pixels* separate from the *terminal*, so the
+same composition renders identically to a GIF or to your terminal — and a higher-fidelity
+terminal backend can drop in later without touching the editor.
 
 ```
 main.go                  entry point + subcommand dispatch (serve | edit)
+internal/scene/          document model — elements, z-order, JSON  (TUI ↔ web bridge)
+internal/render/         scene → pixel frames → GIF  (fogleman/gg + image/gif)
+internal/termimg/        image → terminal half-block string  (swappable renderer)
+internal/tui/            Bubble Tea editor  (Model / Update / View + mouse)
+internal/gifmaker/       GitHub fetch + the default stats composition
 web/index.html           htmx front page (embedded via //go:embed)
 scenes/                  saved scene JSON files (served via /gif?scene=)
-internal/scene/          document model — elements, z-order, JSON (TUI↔web bridge)
-internal/render/         scene → pixel frames → GIF (fogleman/gg + image/gif)
-internal/termimg/        image → terminal half-block string (swappable renderer)
-internal/tui/            Bubble Tea editor (Model/Update/View + mouse)
-internal/gifmaker/       GitHub Fetch + the default stats composition
-Dockerfile               host-agnostic container
 ```
 
-## Hosting (free, no surprise bills)
+The **why** behind these choices — Go, the Elm-style TUI architecture, the three-layer
+renderer split, half-blocks-first — is written up in **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
-Deliberately **not** GCP/Cloud Run: GCP has **no hard spending cap** — budget alerts only notify,
-they don't stop charges. For a fear-free free host, pick one that hard-stops or is always-free:
+## Hosting
 
-| Host | Card needed? | Notes |
+Deliberately **not** GCP/Cloud Run — GCP has no hard spending cap (budget alerts only notify,
+they don't stop charges). Pick a host that hard-stops or is always-free:
+
+| Host | Card? | Notes |
 |---|---|---|
-| **Oracle Cloud Always Free** | yes (but never charges Always-Free shapes) | Always-on VM, no cold start, most compute. More ops. |
-| **Koyeb free** | no | Hard-capped PaaS, runs this container. Some cold start. |
-| **Render free** | no | Sleeps after 15 min idle (~50s cold). Fine because Camo caches the image. |
+| **Oracle Cloud Always Free** | yes (never charges Always-Free shapes) | Always-on VM, no cold start. More ops. |
+| **Koyeb free** | no | Hard-capped PaaS, runs the container. Some cold start. |
+| **Render free** | no | Sleeps after 15 min idle (~50s cold). Fine — Camo caches the image. |
 
-The `Cache-Control` header (step 4) makes GitHub's Camo proxy cache the GIF, so most README
-views never hit your server — that's what keeps you inside any free tier.
+## Contributing
 
-## Env
-- `PORT` — injected by the host (defaults to 8080; `serve -port` overrides locally).
-- `GITHUB_TOKEN` — a read-only PAT for the GitHub GraphQL API (followers, commit
-  contributions, and summed stargazers).
-- `PROFILEGIF_MOCK=1` — skip the API and use deterministic sample data (great for local dev,
-  demos, and CI). The editor's `-mock` flag sets this for you.
+Issues and PRs welcome. To develop:
+
+```sh
+go build ./...     # build everything
+go test ./...      # run the test suite
+go vet ./...       # static checks
+gofmt -l .         # formatting (should print nothing)
+```
+
+Keep `internal/scene`, `internal/render`, and `internal/gifmaker` free of HTTP/TUI
+assumptions — that separation is what lets both front-ends share one core.
+
+## License
+
+[MIT](LICENSE) © [sorfeb](https://github.com/sorfeb)
