@@ -1,0 +1,39 @@
+# profilegif — profile README workflow (copy me!)
+#
+# 1. Copy this file into your PROFILE repo (github.com/<you>/<you>) at
+#    .github/workflows/profile.yml
+# 2. Reference the generated image in that repo's README.md:
+#       ![my GitHub stats](profile.gif)
+# 3. Done — it regenerates daily and on demand, committing the updated GIF.
+
+name: Update profile GIF
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # daily at 00:00 UTC
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+permissions:
+  contents: write # needed to commit the refreshed GIF
+
+jobs:
+  profilegif:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: sorfeb/profilegif@v1
+        with:
+          user: ${{ github.repository_owner }}
+          output: profile.gif
+          # If the default token can't read your stats, create a read-only PAT,
+          # store it as a repo secret, and uncomment:
+          # token: ${{ secrets.PROFILEGIF_TOKEN }}
+
+      - name: Commit the updated GIF
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add profile.gif
+          git diff --staged --quiet || git commit -m "chore: refresh profile GIF"
+          git push
