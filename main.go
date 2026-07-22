@@ -75,6 +75,7 @@ func runRender(args []string) {
 	user := fs.String("user", "", "GitHub username to render stats for")
 	sceneFile := fs.String("scene", "", "path to a scene JSON to render (overrides -user)")
 	out := fs.String("o", "profile.gif", "output GIF path")
+	theme := fs.String("theme", "both", "color theme: dark | light | both (both writes -dark and -light files)")
 	mock := fs.Bool("mock", false, "use sample data instead of the GitHub API")
 	fs.Parse(args)
 
@@ -82,40 +83,62 @@ func runRender(args []string) {
 		os.Setenv("PROFILEGIF_MOCK", "1")
 	}
 
-	var sc *scene.Scene
-	switch {
-	case *sceneFile != "":
-		loaded, err := scene.Load(*sceneFile)
+	// A saved scene carries its own colors/background, so theme doesn't apply — render as-is.
+	if *sceneFile != "" {
+		sc, err := scene.Load(*sceneFile)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "profilegif render: %v\n", err)
-			os.Exit(1)
+			renderFatal(err)
 		}
-		sc = loaded
-	case *user != "":
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
-		stats, err := gifmaker.Fetch(ctx, *user, os.Getenv("GITHUB_TOKEN"))
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "profilegif render: %v\n", err)
-			os.Exit(1)
-		}
-		sc = gifmaker.DefaultScene(stats)
-	default:
+		writeGIF(*out, sc)
+		return
+	}
+
+	if *user == "" {
 		fmt.Fprintln(os.Stderr, "profilegif render: need -user <login> or -scene <file>")
 		os.Exit(2)
 	}
 
-	f, err := os.Create(*out)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	stats, err := gifmaker.Fetch(ctx, *user, os.Getenv("GITHUB_TOKEN"))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "profilegif render: %v\n", err)
-		os.Exit(1)
+		renderFatal(err)
+	}
+
+	themes := []string{*theme}
+	if *theme == "both" {
+		themes = []string{gifmaker.ThemeDark, gifmaker.ThemeLight}
+	}
+	for _, th := range themes {
+		path := *out
+		if *theme == "both" {
+			path = themedPath(*out, th) // profile.gif → profile-dark.gif / profile-light.gif
+		}
+		writeGIF(path, gifmaker.DefaultSceneTheme(stats, th))
+	}
+}
+
+// themedPath inserts a "-<theme>" suffix before the file extension.
+func themedPath(out, theme string) string {
+	ext := filepath.Ext(out)
+	return strings.TrimSuffix(out, ext) + "-" + theme + ext
+}
+
+func writeGIF(path string, sc *scene.Scene) {
+	f, err := os.Create(path)
+	if err != nil {
+		renderFatal(err)
 	}
 	defer f.Close()
 	if err := render.EncodeScene(f, sc); err != nil {
-		fmt.Fprintf(os.Stderr, "profilegif render: %v\n", err)
-		os.Exit(1)
+		renderFatal(err)
 	}
-	log.Printf("wrote %s", *out)
+	log.Printf("wrote %s", path)
+}
+
+func renderFatal(err error) {
+	fmt.Fprintf(os.Stderr, "profilegif render: %v\n", err)
+	os.Exit(1)
 }
 
 // runServe is the original web server: the htmx UI plus /preview and /gif.

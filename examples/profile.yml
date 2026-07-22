@@ -2,9 +2,11 @@
 #
 # 1. Copy this file into your PROFILE repo (github.com/<you>/<you>) at
 #    .github/workflows/profile.yml
-# 2. Reference the generated image in that repo's README.md:
-#       ![my GitHub stats](profile.gif)
-# 3. Done — it regenerates daily and on demand, committing the updated GIF.
+# 2. Reference BOTH theme variants in that repo's README.md so the right one shows
+#    in light vs dark mode (the images are transparent and monochrome):
+#       ![my GitHub stats](profile-dark.gif#gh-dark-mode-only)
+#       ![my GitHub stats](profile-light.gif#gh-light-mode-only)
+# 3. Done — it regenerates daily and on demand, committing the updated GIFs.
 
 name: Update profile GIF
 
@@ -26,14 +28,15 @@ jobs:
         with:
           user: ${{ github.repository_owner }}
           output: profile.gif
+          theme: both # writes profile-dark.gif and profile-light.gif
           # If the default token can't read your stats, create a read-only PAT,
           # store it as a repo secret, and uncomment:
           # token: ${{ secrets.PROFILEGIF_TOKEN }}
 
-      - name: Commit the updated GIF
+      - name: Commit the updated GIFs
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add profile.gif
+          git add profile-dark.gif profile-light.gif
           git diff --staged --quiet || git commit -m "chore: refresh profile GIF"
           git push

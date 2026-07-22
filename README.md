@@ -33,16 +33,18 @@ on a canvas. No Node, no separate frontend, deploys anywhere.
 
 `profilegif` produces the animated stats card you drop into a GitHub profile README:
 
-![Example output](assets/demo.gif)
+![Example output](assets/demo-dark.gif#gh-dark-mode-only)
+![Example output](assets/demo-light.gif#gh-light-mode-only)
 
-But the interesting part is **how you build it**. Instead of fiddling with config files, you
-lay the card out visually in your terminal — drag widgets around, resize them, retype labels —
-then export a GIF or serve it live. Same rendering core drives both.
+The default look is a **monochrome, terminal/ASCII card on a transparent background** — one
+ink color, monospace, `[████░░░░]` meters — so it blends into your README in both light and
+dark mode. And the interesting part is **how you build it**: lay the card out visually in your
+terminal — drag widgets around, resize them, retype labels — then export or serve it.
 
+- 🎯 **Blends with GitHub's theme** — transparent background + light/dark ink variants.
 - 🖱️ **Drag & resize in the terminal** — a real editor, mouse and all, no browser.
 - 🎨 **Hybrid canvas** — background image/GIF + GitHub-stat widgets + free text/image layers.
-- ▶️ **Live animation preview** — watch counters tick and bars grow as you edit.
-- 🌐 **Serve or export** — an embeddable image URL for your README, or a `.gif` file.
+- ▶️ **Live animation preview** — watch counters tick and bars fill as you edit.
 - 📦 **Single static binary** — pure Go, `CGO_ENABLED=0`, runs anywhere.
 
 ## Add it to your profile (GitHub Actions)
@@ -67,19 +69,20 @@ jobs:
       - uses: sorfeb/profilegif@v1
         with:
           user: ${{ github.repository_owner }}
-          output: profile.gif
+          theme: both # writes profile-dark.gif and profile-light.gif
       - run: |
           git config user.name github-actions[bot]
           git config user.email github-actions[bot]@users.noreply.github.com
-          git add profile.gif
+          git add profile-dark.gif profile-light.gif
           git diff --staged --quiet || git commit -m "chore: refresh profile GIF"
           git push
 ```
 
-Then in your README:
+Then in your README — GitHub shows the matching variant per theme:
 
 ```markdown
-![my GitHub stats](profile.gif)
+![my GitHub stats](profile-dark.gif#gh-dark-mode-only)
+![my GitHub stats](profile-light.gif#gh-light-mode-only)
 ```
 
 That's it — it refreshes daily and whenever you trigger it manually. A ready-to-copy version
@@ -95,7 +98,7 @@ git clone https://github.com/sorfeb/profilegif.git
 cd profilegif
 
 go run . edit                       # interactive editor (sample data — no token needed)
-go run . render -user you -mock     # one-shot render → profile.gif (what the Action runs)
+go run . render -user you -mock     # one-shot → profile-dark.gif + profile-light.gif
 go run . serve                      # web server on http://localhost:8080
 ```
 
