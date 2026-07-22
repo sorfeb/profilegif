@@ -34,12 +34,14 @@ func NewBackground(path string, w, h int) *Background {
 	return &Background{base: base{Rect: Rect{X: 0, Y: 0, W: w, H: h}}, Path: path, Fit: FitCover}
 }
 
-// TextElement is a run of text with a size and color.
+// TextElement is a run of text with a size and color. Mono selects the monospace face
+// (the terminal/ASCII look); Color empty means "use the scene's Ink".
 type TextElement struct {
 	base
 	Text     string  `json:"text"`
 	FontSize float64 `json:"fontSize"`
-	Color    string  `json:"color"` // hex "#RRGGBB"
+	Color    string  `json:"color,omitempty"` // hex "#RRGGBB"; empty → scene Ink
+	Mono     bool    `json:"mono,omitempty"`
 }
 
 func (TextElement) Kind() string { return KindText }
@@ -75,13 +77,17 @@ const (
 // Login identifies whose stats to fetch; if empty the scene's default login is used.
 // Value is the resolved number the widget animates toward — populated by gifmaker after a
 // GitHub fetch (or by the editor's mock/sample data), keeping the renderer pure.
+// It renders as a monospace line: "label   value  [████░░░░]". Max is the meter's full-bar
+// value (the bar shows Value/Max); BarCells is the bar width in characters.
 type StatWidget struct {
 	base
 	Metric   string  `json:"metric"`
 	Login    string  `json:"login"`
 	Label    string  `json:"label"`
 	Value    int     `json:"value"`
-	Color    string  `json:"color"`
+	Max      int     `json:"max,omitempty"`
+	BarCells int     `json:"barCells,omitempty"`
+	Color    string  `json:"color,omitempty"`
 	FontSize float64 `json:"fontSize"`
 }
 

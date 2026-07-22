@@ -9,6 +9,7 @@
 package render
 
 import (
+	"fmt"
 	"image"
 	"strconv"
 	"strings"
@@ -18,30 +19,44 @@ import (
 	xdraw "golang.org/x/image/draw"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
+	"golang.org/x/image/font/gofont/gomono"
 	"golang.org/x/image/font/gofont/goregular"
 	"golang.org/x/image/font/opentype"
 )
 
-// bgFill is the canvas base color drawn beneath every layer (GitHub dark).
+// bgFill is the canvas base color drawn beneath every layer when the scene is NOT transparent.
 const bgFill = "#0d1117"
 
-var baseFont *opentype.Font
+// defaultInk is the monochrome foreground used when a scene sets no Ink (GitHub neutral gray).
+const defaultInk = "#8b949e"
+
+var (
+	sansFont *opentype.Font
+	monoFont *opentype.Font
+)
 
 func init() {
-	f, err := opentype.Parse(goregular.TTF)
-	if err != nil {
-		panic("render: parse embedded font: " + err.Error())
+	var err error
+	if sansFont, err = opentype.Parse(goregular.TTF); err != nil {
+		panic("render: parse sans font: " + err.Error())
 	}
-	baseFont = f
+	if monoFont, err = opentype.Parse(gomono.TTF); err != nil {
+		panic("render: parse mono font: " + err.Error())
+	}
 }
 
-// faceAt builds a font face at the given pixel size. At 72 DPI, 1 point == 1 pixel, so
-// size is effectively the cap height in pixels. Caller must Close the returned face.
-func faceAt(size float64) font.Face {
+// faceAt builds a proportional font face at the given pixel size (72 DPI → 1pt == 1px).
+// Caller must Close the returned face.
+func faceAt(size float64) font.Face { return newFace(sansFont, size) }
+
+// monoFaceAt builds a monospace face — the terminal/ASCII look. Caller must Close it.
+func monoFaceAt(size float64) font.Face { return newFace(monoFont, size) }
+
+func newFace(f *opentype.Font, size float64) font.Face {
 	if size <= 0 {
 		size = 24
 	}
-	face, err := opentype.NewFace(baseFont, &opentype.FaceOptions{
+	face, err := opentype.NewFace(f, &opentype.FaceOptions{
 		Size:    size,
 		DPI:     72,
 		Hinting: font.HintingFull,
@@ -56,8 +71,16 @@ func faceAt(size float64) font.Face {
 // frame is 0-based; progress across the animation drives StatWidget animation.
 func Rasterize(s *scene.Scene, frame int) image.Image {
 	dc := gg.NewContext(s.W, s.H)
-	dc.SetHexColor(bgFill)
-	dc.Clear()
+	if !s.Transparent {
+		dc.SetHexColor(bgFill)
+		dc.Clear()
+	}
+	// gg.NewContext starts fully transparent, so a transparent scene needs no fill.
+
+	ink := s.Ink
+	if ink == "" {
+		ink = defaultInk
+	}
 
 	total := s.FrameCount()
 	progress := 1.0
@@ -78,12 +101,19 @@ func Rasterize(s *scene.Scene, frame int) image.Image {
 		case *scene.ImageElement:
 			drawImage(dc, e.Path, e.Bounds(), e.Fit)
 		case *scene.TextElement:
-			drawText(dc, e.Text, e.FontSize, e.Color, e.Bounds())
+			drawText(dc, e, colorOr(e.Color, ink))
 		case *scene.StatWidget:
-			drawStatWidget(dc, e, progress)
+			drawStatWidget(dc, e, colorOr(e.Color, ink), progress)
 		}
 	}
 	return dc.Image()
+}
+
+func colorOr(c, fallback string) string {
+	if c == "" {
+		return fallback
+	}
+	return c
 }
 
 func drawImage(dc *gg.Context, path string, r scene.Rect, fit string) {
@@ -111,63 +141,74 @@ func drawPlaceholder(dc *gg.Context, r scene.Rect) {
 	dc.Pop()
 }
 
-func drawText(dc *gg.Context, text string, size float64, hex string, r scene.Rect) {
-	if text == "" {
+func drawText(dc *gg.Context, e *scene.TextElement, hex string) {
+	if e.Text == "" {
 		return
 	}
-	face := faceAt(size)
+	face := faceAt(e.FontSize)
+	if e.Mono {
+		face = monoFaceAt(e.FontSize)
+	}
 	defer face.Close()
 	dc.SetFontFace(face)
-	if hex == "" {
-		hex = "#ffffff"
-	}
 	dc.SetHexColor(hex)
-	cx := float64(r.X) + float64(r.W)/2
-	cy := float64(r.Y) + float64(r.H)/2
-	dc.DrawStringAnchored(text, cx, cy, 0.5, 0.5)
+	r := e.Bounds()
+	// Left-aligned, vertically centered — reads like a terminal line.
+	dc.DrawStringAnchored(e.Text, float64(r.X), float64(r.Y)+float64(r.H)/2, 0, 0.5)
 }
 
-func drawStatWidget(dc *gg.Context, e *scene.StatWidget, progress float64) {
+// barGlyphs are the filled/empty cells of the ASCII meter.
+const (
+	barFull  = '█'
+	barEmpty = '░'
+)
+
+// drawStatWidget renders one monospace terminal line: "label   value  [████░░░░]".
+// The counter ticks 0→Value and the bar fills 0→Value/Max as the animation progresses.
+func drawStatWidget(dc *gg.Context, e *scene.StatWidget, hex string, progress float64) {
 	r := e.Bounds()
-	color := e.Color
-	if color == "" {
-		color = "#39d353"
-	}
 	label := e.Label
 	if label == "" {
 		label = defaultLabel(e.Metric)
 	}
-	val := int(float64(e.Value) * progress)
-
-	// Big animated number.
-	numFace := faceAt(e.FontSize)
-	dc.SetFontFace(numFace)
-	dc.SetHexColor(color)
-	dc.DrawStringAnchored(formatInt(val),
-		float64(r.X)+float64(r.W)/2, float64(r.Y)+float64(r.H)*0.35, 0.5, 0.5)
-	numFace.Close()
-
-	// Muted label beneath.
-	lblSize := e.FontSize * 0.45
-	if lblSize < 8 {
-		lblSize = 8
+	cells := e.BarCells
+	if cells <= 0 {
+		cells = 10
 	}
-	lblFace := faceAt(lblSize)
-	dc.SetFontFace(lblFace)
-	dc.SetHexColor("#8b949e")
-	dc.DrawStringAnchored(label,
-		float64(r.X)+float64(r.W)/2, float64(r.Y)+float64(r.H)*0.60, 0.5, 0.5)
-	lblFace.Close()
+	max := e.Max
+	if max <= 0 {
+		max = e.Value // no meter target → bar simply fills as the counter completes
+	}
 
-	// Progress bar along the bottom: track + growing fill.
-	const barH = 6.0
-	barY := float64(r.Y) + float64(r.H) - barH - 2
-	dc.SetHexColor("#30363d")
-	dc.DrawRectangle(float64(r.X), barY, float64(r.W), barH)
-	dc.Fill()
-	dc.SetHexColor(color)
-	dc.DrawRectangle(float64(r.X), barY, float64(r.W)*progress, barH)
-	dc.Fill()
+	val := int(float64(e.Value) * progress)
+	frac := 0.0
+	if max > 0 {
+		frac = float64(val) / float64(max)
+	}
+	if frac > 1 {
+		frac = 1
+	}
+	filled := int(frac*float64(cells) + 0.5)
+
+	bar := make([]rune, 0, cells+2)
+	bar = append(bar, '[')
+	for i := 0; i < cells; i++ {
+		if i < filled {
+			bar = append(bar, barFull)
+		} else {
+			bar = append(bar, barEmpty)
+		}
+	}
+	bar = append(bar, ']')
+
+	// label left-padded value, right-aligned within a fixed column, then the bar.
+	line := fmt.Sprintf("%-10s %6s  %s", label, formatInt(val), string(bar))
+
+	face := monoFaceAt(e.FontSize)
+	defer face.Close()
+	dc.SetFontFace(face)
+	dc.SetHexColor(hex)
+	dc.DrawStringAnchored(line, float64(r.X), float64(r.Y)+float64(r.H)/2, 0, 0.5)
 }
 
 func defaultLabel(metric string) string {
