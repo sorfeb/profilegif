@@ -5,6 +5,8 @@
 
 # generated artifacts
 *.gif
+scene.json
+!assets/*.gif   # keep the README demo GIF
 
 # local secrets
 .env

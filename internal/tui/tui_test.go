@@ -112,6 +112,30 @@ func TestPlayPauseAndTick(t *testing.T) {
 	}
 }
 
+func TestBaseCacheLifecycle(t *testing.T) {
+	m := sized()
+	_ = m.View() // renders the current frame → should cache it
+	if len(m.baseCache) == 0 {
+		t.Fatal("View should populate the base cache")
+	}
+
+	// An edit must invalidate the cache.
+	m = key(m, tea.Key{Type: tea.KeyRight}) // nudge
+	if len(m.baseCache) != 0 {
+		t.Errorf("edit should invalidate cache, got %d entries", len(m.baseCache))
+	}
+
+	// A resize must NOT invalidate (the cache is size-independent) — this is the fix that
+	// keeps Ctrl +/- resize bursts from re-rasterizing every frame.
+	_ = m.View()
+	before := len(m.baseCache)
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = next.(Model)
+	if len(m.baseCache) != before {
+		t.Errorf("resize should not invalidate cache: before %d after %d", before, len(m.baseCache))
+	}
+}
+
 func TestQuitKey(t *testing.T) {
 	m := sized()
 	_, cmd := m.Update(tea.KeyMsg(tea.Key{Type: tea.KeyRunes, Runes: []rune{'q'}}))

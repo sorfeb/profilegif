@@ -71,11 +71,13 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "]":
 		if m.selected >= 0 {
 			m.selected = m.scene.Raise(m.selected)
+			m.invalidate()
 			m.status = "raised"
 		}
 	case "[":
 		if m.selected >= 0 {
 			m.selected = m.scene.Lower(m.selected)
+			m.invalidate()
 			m.status = "lowered"
 		}
 
@@ -158,6 +160,7 @@ func (m *Model) nudge(dx, dy int) {
 	r.X += dx
 	r.Y += dy
 	el.SetBounds(m.clampToCanvas(r))
+	m.invalidate()
 	m.status = "moved"
 }
 
@@ -169,6 +172,7 @@ func (m *Model) deleteSelected() {
 	if m.selected >= len(m.scene.Layers) {
 		m.selected = len(m.scene.Layers) - 1
 	}
+	m.invalidate()
 	m.status = "deleted"
 }
 
