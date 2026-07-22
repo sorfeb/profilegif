@@ -20,12 +20,12 @@ on a canvas. No Node, no separate frontend, deploys anywhere.
 ## Table of contents
 
 - [What it does](#what-it-does)
-- [Quickstart](#quickstart)
+- [Add it to your profile (GitHub Actions)](#add-it-to-your-profile-github-actions)
+- [Quickstart (local)](#quickstart-local)
 - [The editor](#the-editor)
 - [The web service](#the-web-service)
 - [Configuration](#configuration)
 - [How it works](#how-it-works)
-- [Hosting](#hosting)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -45,7 +45,48 @@ then export a GIF or serve it live. Same rendering core drives both.
 - 🌐 **Serve or export** — an embeddable image URL for your README, or a `.gif` file.
 - 📦 **Single static binary** — pure Go, `CGO_ENABLED=0`, runs anywhere.
 
-## Quickstart
+## Add it to your profile (GitHub Actions)
+
+**The recommended way — no server to host.** A scheduled GitHub Action renders your GIF and
+commits it to your repo; your README just points at the committed file.
+
+Add `.github/workflows/profile.yml` to your **profile repo** (`github.com/<you>/<you>`):
+
+```yaml
+name: Update profile GIF
+on:
+  schedule: [{ cron: "0 0 * * *" }] # daily
+  workflow_dispatch: {}
+permissions:
+  contents: write
+jobs:
+  profilegif:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: sorfeb/profilegif@v1
+        with:
+          user: ${{ github.repository_owner }}
+          output: profile.gif
+      - run: |
+          git config user.name github-actions[bot]
+          git config user.email github-actions[bot]@users.noreply.github.com
+          git add profile.gif
+          git diff --staged --quiet || git commit -m "chore: refresh profile GIF"
+          git push
+```
+
+Then in your README:
+
+```markdown
+![my GitHub stats](profile.gif)
+```
+
+That's it — it refreshes daily and whenever you trigger it manually. A ready-to-copy version
+lives in [`examples/profile.yml`](examples/profile.yml). If the default token can't read your
+stats, pass a read-only PAT via `token: ${{ secrets.PROFILEGIF_TOKEN }}`.
+
+## Quickstart (local)
 
 Requires **Go 1.25+**.
 
@@ -53,8 +94,9 @@ Requires **Go 1.25+**.
 git clone https://github.com/sorfeb/profilegif.git
 cd profilegif
 
-go run . edit          # open the interactive editor (sample data — no token needed)
-go run . serve         # start the web server on http://localhost:8080
+go run . edit                       # interactive editor (sample data — no token needed)
+go run . render -user you -mock     # one-shot render → profile.gif (what the Action runs)
+go run . serve                      # web server on http://localhost:8080
 ```
 
 ## The editor
@@ -115,7 +157,9 @@ same composition renders identically to a GIF or to your terminal — and a high
 terminal backend can drop in later without touching the editor.
 
 ```
-main.go                  entry point + subcommand dispatch (serve | edit)
+main.go                  entry point + subcommand dispatch (serve | edit | render)
+action.yml               reusable GitHub Action (uses: sorfeb/profilegif@v1)
+examples/profile.yml     copy-paste workflow for your profile repo
 internal/scene/          document model — elements, z-order, JSON  (TUI ↔ web bridge)
 internal/render/         scene → pixel frames → GIF  (fogleman/gg + image/gif)
 internal/termimg/        image → terminal half-block string  (swappable renderer)
@@ -127,17 +171,6 @@ scenes/                  saved scene JSON files (served via /gif?scene=)
 
 The **why** behind these choices — Go, the Elm-style TUI architecture, the three-layer
 renderer split, half-blocks-first — is written up in **[ARCHITECTURE.md](ARCHITECTURE.md)**.
-
-## Hosting
-
-Deliberately **not** GCP/Cloud Run — GCP has no hard spending cap (budget alerts only notify,
-they don't stop charges). Pick a host that hard-stops or is always-free:
-
-| Host | Card? | Notes |
-|---|---|---|
-| **Oracle Cloud Always Free** | yes (never charges Always-Free shapes) | Always-on VM, no cold start. More ops. |
-| **Koyeb free** | no | Hard-capped PaaS, runs the container. Some cold start. |
-| **Render free** | no | Sleeps after 15 min idle (~50s cold). Fine — Camo caches the image. |
 
 ## Contributing
 
