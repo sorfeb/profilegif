@@ -1,12 +1,16 @@
 # compiled binaries
 /profilegif
 /profilegif.exe
+/profilegif.exe~
 /out/
 
 # generated artifacts
 *.gif
 scene.json
-!assets/*.gif   # keep the README demo GIF
+
+# but keep the committed demo/asset GIFs (gitignore has no inline comments,
+# so this negation must be on its own line)
+!assets/*.gif
 
 # local secrets
 .env
