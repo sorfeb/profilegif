@@ -25,11 +25,12 @@ var webFS embed.FS
 
 var indexTmpl = template.Must(template.ParseFS(webFS, "web/index.html"))
 
-// profilegif has two front-ends over one shared core (internal/gifmaker + scene/render):
+// profilegif has three front-ends over one shared core (internal/gifmaker + scene/render):
 //
 //	profilegif            → same as "serve" (backwards-compatible default)
 //	profilegif serve      → the htmx web server + /gif embed endpoint (delivery)
 //	profilegif edit       → the interactive TUI editor (authoring)
+//	profilegif render     → one-shot GIF render to a file (for CI / GitHub Actions)
 //
 // Plain stdlib arg dispatch — no cobra — matching the project's "no framework" ethos.
 func main() {
@@ -44,6 +45,8 @@ func main() {
 		runServe(args)
 	case "edit":
 		runEdit(args)
+	case "render":
+		runRender(args)
 	case "help", "-h", "--help":
 		usage(os.Stdout)
 	default:
@@ -54,13 +57,65 @@ func main() {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprint(w, `profilegif — animated GitHub-stats GIFs, served or hand-composed.
+	fmt.Fprint(w, `profilegif — animated GitHub-stats GIFs, served, hand-composed, or rendered.
 
 usage:
-  profilegif [serve]   start the web server + /gif embed endpoint (default)
-  profilegif edit      launch the interactive TUI editor
-  profilegif help      show this message
+  profilegif [serve]                 start the web server + /gif embed endpoint (default)
+  profilegif edit                    launch the interactive TUI editor
+  profilegif render -user <login>    render a stats GIF to a file (for GitHub Actions)
+  profilegif help                    show this message
 `)
+}
+
+// runRender is the non-interactive one-shot renderer used by CI / GitHub Actions: it writes
+// a GIF to a file and exits. Source is either a saved scene (-scene) or a user's live stats
+// (-user, via GITHUB_TOKEN or PROFILEGIF_MOCK=1).
+func runRender(args []string) {
+	fs := flag.NewFlagSet("render", flag.ExitOnError)
+	user := fs.String("user", "", "GitHub username to render stats for")
+	sceneFile := fs.String("scene", "", "path to a scene JSON to render (overrides -user)")
+	out := fs.String("o", "profile.gif", "output GIF path")
+	mock := fs.Bool("mock", false, "use sample data instead of the GitHub API")
+	fs.Parse(args)
+
+	if *mock {
+		os.Setenv("PROFILEGIF_MOCK", "1")
+	}
+
+	var sc *scene.Scene
+	switch {
+	case *sceneFile != "":
+		loaded, err := scene.Load(*sceneFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "profilegif render: %v\n", err)
+			os.Exit(1)
+		}
+		sc = loaded
+	case *user != "":
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		stats, err := gifmaker.Fetch(ctx, *user, os.Getenv("GITHUB_TOKEN"))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "profilegif render: %v\n", err)
+			os.Exit(1)
+		}
+		sc = gifmaker.DefaultScene(stats)
+	default:
+		fmt.Fprintln(os.Stderr, "profilegif render: need -user <login> or -scene <file>")
+		os.Exit(2)
+	}
+
+	f, err := os.Create(*out)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "profilegif render: %v\n", err)
+		os.Exit(1)
+	}
+	defer f.Close()
+	if err := render.EncodeScene(f, sc); err != nil {
+		fmt.Fprintf(os.Stderr, "profilegif render: %v\n", err)
+		os.Exit(1)
+	}
+	log.Printf("wrote %s", *out)
 }
 
 // runServe is the original web server: the htmx UI plus /preview and /gif.

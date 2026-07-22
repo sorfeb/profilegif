@@ -1,0 +1,57 @@
+name: profilegif
+description: Generate an animated GitHub-stats GIF for your profile README.
+author: sorfeb
+branding:
+  icon: image
+  color: green
+
+inputs:
+  user:
+    description: GitHub username to render stats for.
+    required: false
+  scene:
+    description: Path to a scene JSON to render (overrides `user`).
+    required: false
+  output:
+    description: Output GIF path (relative to the repo).
+    required: false
+    default: profile.gif
+  token:
+    description: Token used to fetch stats from the GitHub API.
+    required: false
+    default: ${{ github.token }}
+  mock:
+    description: Use deterministic sample data instead of the GitHub API.
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: stable
+
+    - name: Install profilegif
+      shell: bash
+      run: |
+        go install "github.com/sorfeb/profilegif@${{ github.action_ref || 'main' }}"
+        echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+    - name: Render GIF
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+        PROFILEGIF_MOCK: ${{ inputs.mock == 'true' && '1' || '' }}
+      run: |
+        args=(-o "${{ inputs.output }}")
+        if [ -n "${{ inputs.scene }}" ]; then
+          args+=(-scene "${{ inputs.scene }}")
+        elif [ -n "${{ inputs.user }}" ]; then
+          args+=(-user "${{ inputs.user }}")
+        else
+          echo "::error::provide either 'user' or 'scene'"
+          exit 1
+        fi
+        profilegif render "${args[@]}"
