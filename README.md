@@ -25,7 +25,6 @@ on a canvas. No Node, no separate frontend, deploys anywhere.
 - [The web service](#the-web-service)
 - [Configuration](#configuration)
 - [How it works](#how-it-works)
-- [Hosting](#hosting)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -127,17 +126,6 @@ scenes/                  saved scene JSON files (served via /gif?scene=)
 
 The **why** behind these choices — Go, the Elm-style TUI architecture, the three-layer
 renderer split, half-blocks-first — is written up in **[ARCHITECTURE.md](ARCHITECTURE.md)**.
-
-## Hosting
-
-Deliberately **not** GCP/Cloud Run — GCP has no hard spending cap (budget alerts only notify,
-they don't stop charges). Pick a host that hard-stops or is always-free:
-
-| Host | Card? | Notes |
-|---|---|---|
-| **Oracle Cloud Always Free** | yes (never charges Always-Free shapes) | Always-on VM, no cold start. More ops. |
-| **Koyeb free** | no | Hard-capped PaaS, runs the container. Some cold start. |
-| **Render free** | no | Sleeps after 15 min idle (~50s cold). Fine — Camo caches the image. |
 
 ## Contributing
 
