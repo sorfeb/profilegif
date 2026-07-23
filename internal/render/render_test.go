@@ -87,6 +87,49 @@ func imagesEqual(a, b image.Image) bool {
 	return true
 }
 
+func TestRasterizeTransparency(t *testing.T) {
+	// Transparent scene → corner pixel is fully transparent.
+	s := scene.NewScene(50, 50)
+	s.Transparent = true
+	if _, _, _, a := Rasterize(s, 0).At(0, 0).RGBA(); a != 0 {
+		t.Errorf("transparent scene corner: got alpha %d want 0", a)
+	}
+	// Default scene → corner pixel is opaque.
+	s2 := scene.NewScene(50, 50)
+	if _, _, _, a := Rasterize(s2, 0).At(0, 0).RGBA(); a == 0 {
+		t.Error("opaque scene corner should not be transparent")
+	}
+}
+
+func TestEncodeTransparentGIF(t *testing.T) {
+	s := scene.NewScene(80, 40)
+	s.Transparent = true
+	s.Ink = "#c9d1d9"
+	s.FPS, s.DurationMs = 5, 1000
+	s.Add(scene.NewText(scene.Rect{X: 2, Y: 2, W: 76, H: 24}, "hi"))
+
+	var buf bytes.Buffer
+	if err := EncodeScene(&buf, s); err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	g, err := gif.DecodeAll(&buf)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	// Some frame's palette must include a fully-transparent entry.
+	found := false
+	for _, img := range g.Image {
+		for _, c := range img.Palette {
+			if _, _, _, a := c.RGBA(); a == 0 {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Error("transparent scene should produce a transparent palette entry")
+	}
+}
+
 func TestFormatInt(t *testing.T) {
 	cases := map[int]string{0: "0", 42: "42", 1234: "1,234", 1000000: "1,000,000", -1234: "-1,234"}
 	for in, want := range cases {

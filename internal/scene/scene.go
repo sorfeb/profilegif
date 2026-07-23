@@ -47,12 +47,18 @@ func (b *base) SetBounds(r Rect) { b.Rect = r }
 
 // Scene is the whole document: canvas size, animation timing, and layers bottom→top.
 // Layer order IS z-order: Layers[0] is drawn first (bottom); the last is on top.
+//
+// Transparent leaves the canvas background unfilled (a transparent GIF that blends into the
+// README's theme). Ink is the default foreground color for elements that don't set their own
+// — the single color of the monochrome look.
 type Scene struct {
-	W          int
-	H          int
-	FPS        int
-	DurationMs int
-	Layers     []Element
+	W           int
+	H           int
+	FPS         int
+	DurationMs  int
+	Transparent bool
+	Ink         string
+	Layers      []Element
 }
 
 // NewScene returns an empty scene with sensible animation defaults.
@@ -118,16 +124,18 @@ func (s *Scene) Lower(i int) int {
 // "kind" discriminator alongside its fields. This is the standard tagged-union pattern.
 
 type sceneJSON struct {
-	W          int               `json:"w"`
-	H          int               `json:"h"`
-	FPS        int               `json:"fps"`
-	DurationMs int               `json:"durationMs"`
-	Layers     []json.RawMessage `json:"layers"`
+	W           int               `json:"w"`
+	H           int               `json:"h"`
+	FPS         int               `json:"fps"`
+	DurationMs  int               `json:"durationMs"`
+	Transparent bool              `json:"transparent,omitempty"`
+	Ink         string            `json:"ink,omitempty"`
+	Layers      []json.RawMessage `json:"layers"`
 }
 
 // MarshalJSON emits each layer as its fields plus a "kind" tag.
 func (s Scene) MarshalJSON() ([]byte, error) {
-	out := sceneJSON{W: s.W, H: s.H, FPS: s.FPS, DurationMs: s.DurationMs}
+	out := sceneJSON{W: s.W, H: s.H, FPS: s.FPS, DurationMs: s.DurationMs, Transparent: s.Transparent, Ink: s.Ink}
 	for _, el := range s.Layers {
 		raw, err := json.Marshal(el)
 		if err != nil {
@@ -158,6 +166,7 @@ func (s *Scene) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	s.W, s.H, s.FPS, s.DurationMs = sj.W, sj.H, sj.FPS, sj.DurationMs
+	s.Transparent, s.Ink = sj.Transparent, sj.Ink
 	s.Layers = nil
 	for _, raw := range sj.Layers {
 		el, err := unmarshalElement(raw)

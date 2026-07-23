@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/sorfeb/profilegif/internal/render"
 	"github.com/sorfeb/profilegif/internal/scene"
@@ -24,37 +25,55 @@ type Stats struct {
 	// Future: Languages []LangStat, ContributionDays []int, Streak int, etc.
 }
 
-// DefaultScene builds the standard stats composition from fetched Stats. This is the layout
-// the web server serves out of the box; the TUI editor can load, rearrange, and re-save it.
-func DefaultScene(s Stats) *scene.Scene {
-	sc := scene.NewScene(800, 400)
+// Theme names for the default composition. GIFs can't adapt to the viewer's GitHub theme,
+// so we render a variant per theme and let the README pick with #gh-light/dark-mode-only.
+const (
+	ThemeDark  = "dark"
+	ThemeLight = "light"
+)
 
-	title := scene.NewText(scene.Rect{X: 0, Y: 26, W: 800, H: 80}, "@"+s.Login)
-	title.FontSize = 56
-	title.Color = "#e6edf3"
+// DefaultScene builds the standard stats composition (dark theme) from fetched Stats.
+func DefaultScene(s Stats) *scene.Scene { return DefaultSceneTheme(s, ThemeDark) }
+
+// DefaultSceneTheme builds the monochrome, terminal/ASCII stats card on a transparent
+// background: a monospace title plus one "label  value  [████░░░░]" meter line per stat.
+// The single ink color is chosen for the given theme.
+func DefaultSceneTheme(s Stats, theme string) *scene.Scene {
+	sc := scene.NewScene(560, 220)
+	sc.Transparent = true
+	sc.Ink = inkForTheme(theme)
+	sc.FPS = 15
+	sc.DurationMs = 2500
+
+	title := scene.NewText(scene.Rect{X: 28, Y: 26, W: 504, H: 44}, "@"+s.Login)
+	title.Mono = true
+	title.FontSize = 34
+	title.Color = "" // inherit the scene's monochrome ink (NewText defaults to white)
 	sc.Add(title)
 
-	commits := scene.NewStatWidget(scene.Rect{X: 60, Y: 150, W: 200, H: 190}, scene.MetricCommits, s.Login)
-	commits.Value = s.TotalCommits
-	commits.Label = "commits"
-	commits.FontSize = 44
-	sc.Add(commits)
-
-	followers := scene.NewStatWidget(scene.Rect{X: 300, Y: 150, W: 200, H: 190}, scene.MetricFollowers, s.Login)
-	followers.Value = s.Followers
-	followers.Label = "followers"
-	followers.Color = "#58a6ff"
-	followers.FontSize = 44
-	sc.Add(followers)
-
-	stars := scene.NewStatWidget(scene.Rect{X: 540, Y: 150, W: 200, H: 190}, scene.MetricStars, s.Login)
-	stars.Value = s.Stars
-	stars.Label = "stars"
-	stars.Color = "#e3b341"
-	stars.FontSize = 44
-	sc.Add(stars)
+	add := func(y int, metric, label string, value, max int) {
+		w := scene.NewStatWidget(scene.Rect{X: 28, Y: y, W: 504, H: 40}, metric, s.Login)
+		w.Label = label
+		w.Value = value
+		w.Max = max
+		w.BarCells = 10
+		w.FontSize = 26
+		w.Color = "" // inherit the scene's monochrome ink
+		sc.Add(w)
+	}
+	add(92, scene.MetricCommits, "commits", s.TotalCommits, 5000)
+	add(132, scene.MetricFollowers, "followers", s.Followers, 500)
+	add(172, scene.MetricStars, "stars", s.Stars, 1000)
 
 	return sc
+}
+
+// inkForTheme returns the single foreground color legible on that GitHub theme's surface.
+func inkForTheme(theme string) string {
+	if strings.EqualFold(theme, ThemeLight) {
+		return "#1f2328" // near-black ink for light backgrounds
+	}
+	return "#c9d1d9" // light gray ink for dark backgrounds
 }
 
 // Render builds the default scene for these stats and encodes it as an animated GIF to w.

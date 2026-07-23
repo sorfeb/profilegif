@@ -23,6 +23,25 @@ func TestDefaultSceneLayout(t *testing.T) {
 	}
 }
 
+func TestDefaultSceneThemed(t *testing.T) {
+	dark := DefaultSceneTheme(Stats{Login: "x", TotalCommits: 100}, ThemeDark)
+	light := DefaultSceneTheme(Stats{Login: "x", TotalCommits: 100}, ThemeLight)
+
+	if !dark.Transparent || !light.Transparent {
+		t.Error("themed default scenes should be transparent")
+	}
+	if dark.Ink == "" || light.Ink == "" {
+		t.Error("themed scenes should set an ink color")
+	}
+	if dark.Ink == light.Ink {
+		t.Errorf("dark and light ink should differ (both %q)", dark.Ink)
+	}
+	// Title should inherit the scene ink (no hardcoded color).
+	if tx, ok := light.Layers[0].(*scene.TextElement); !ok || tx.Color != "" {
+		t.Errorf("title should inherit ink (empty color), got %+v", light.Layers[0])
+	}
+}
+
 func TestRenderProducesGIF(t *testing.T) {
 	var buf bytes.Buffer
 	if err := Render(&buf, Stats{Login: "sorfeb", TotalCommits: 100, Followers: 5}); err != nil {

@@ -13,9 +13,13 @@ inputs:
     description: Path to a scene JSON to render (overrides `user`).
     required: false
   output:
-    description: Output GIF path (relative to the repo).
+    description: Output GIF path. With theme "both", writes <base>-dark and <base>-light.
     required: false
     default: profile.gif
+  theme:
+    description: 'Color theme: dark | light | both.'
+    required: false
+    default: both
   token:
     description: Token used to fetch stats from the GitHub API.
     required: false
@@ -45,7 +49,7 @@ runs:
         GITHUB_TOKEN: ${{ inputs.token }}
         PROFILEGIF_MOCK: ${{ inputs.mock == 'true' && '1' || '' }}
       run: |
-        args=(-o "${{ inputs.output }}")
+        args=(-o "${{ inputs.output }}" -theme "${{ inputs.theme }}")
         if [ -n "${{ inputs.scene }}" ]; then
           args+=(-scene "${{ inputs.scene }}")
         elif [ -n "${{ inputs.user }}" ]; then
