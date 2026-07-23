@@ -36,5 +36,7 @@ jobs:
 
       - name: Render smoke test
         run: |
+          # default theme is "both", so this writes -dark and -light variants
           go run . render -user octocat -mock -o /tmp/smoke.gif
-          test -s /tmp/smoke.gif
+          test -s /tmp/smoke-dark.gif
+          test -s /tmp/smoke-light.gif
